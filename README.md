@@ -28,7 +28,7 @@ docker compose up -d --build
 
 1. **机位/包厢实时状态看板**：网格/列表展示机位实时状态（空闲/使用中/故障/预约），按区域筛选，支持 WebSocket 实时推送（`/api/v1/ws/stations`）。
 2. **会员充值与时长包**：会员充值余额、购买 10 小时/30 小时/月卡，消费时优先扣除时长包余额，不足时扣余额。
-3. **机位预约与续费**：会员预约指定机位与时段，到店扫码开机，上机过程可续费延长时长。
+3. **机位预约、候补与续费**：会员预约指定机位与时段，热门机位时段已被订走时可排队候补（预约页显示“候补中”与当前顺位）；已确认预约取消时，同机位时段重叠的候补中按提交顺序自动兑现最早且不再冲突的一位，到店扫码开机，上机过程可续费延长时长。
 4. **上机时长排行榜**：按日/周/月统计会员累计上机时长，支持按游戏类型（LOL/CSGO/王者荣耀）筛选。
 5. **赛事报名与战队管理**：门店发布电竞赛事，玩家个人/战队报名，系统自动抽签分组，记录比赛结果与战绩。
 
@@ -152,10 +152,10 @@ docker compose up -d --build
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | /reservations | 预约分页列表 | 登录 |
-| POST | /reservations | 创建预约 | 登录 |
+| GET | /reservations | 预约分页列表（候补记录携带 waitlist_position 当前顺位） | 登录 |
+| POST | /reservations | 创建预约（时段冲突时不报错，返回 status=waitlisted 与候补顺位） | 登录 |
 | POST | /reservations/:id/confirm | 确认预约 | admin/staff |
-| POST | /reservations/:id/cancel | 取消预约 | 登录 |
+| POST | /reservations/:id/cancel | 取消预约（已确认取消时同事务自动兑现一个候补） | 登录 |
 | POST | /reservations/:id/checkin | 到店开机 | admin/staff |
 
 ### 上机记录
@@ -276,12 +276,12 @@ npm run build
 | 后端 | `backend/internal/constants/enums.go`（定义）、`backend/internal/model/station.go`（模型默认值）、`backend/internal/dto/station_dto.go`（handler 校验 oneof）、`backend/internal/service/station_service.go`（状态机 allowedStationTransition）、`backend/internal/util/formatters.go`（StatusText）、`backend/internal/constants/error_codes.go`（CodeStationBusy/Fault）、`backend/internal/constants/log_templates.go`（station_status_change 模板）、`backend/internal/repository/station_repository.go`（筛选） |
 | 前端 | `frontend/src/constants/index.ts`（STATION_STATUS/TEXT/TYPE）、`frontend/src/components/StatusBadge.vue`、`frontend/src/pages/Stations.vue`（筛选与徽标）、`frontend/src/pages/Dashboard.vue`（看板状态展示） |
 
-### 预约状态（pending / confirmed / checked_in / completed / cancelled）
+### 预约状态（pending / waitlisted / confirmed / checked_in / completed / cancelled）
 
 | 端 | 文件 |
 | --- | --- |
-| 后端 | `backend/internal/constants/enums.go`（定义）、`backend/internal/model/reservation.go`、`backend/internal/dto/reservation_dto.go`（oneof 校验）、`backend/internal/service/reservation_service.go`（状态机 Confirm/Cancel/CheckIn）、`backend/internal/util/formatters.go`（StatusText）、`backend/internal/constants/error_codes.go`（CodeReservation）、`backend/internal/constants/log_templates.go`（reservation_* 模板）、`backend/internal/repository/reservation_repository.go`（CountConflict 状态集合） |
-| 前端 | `frontend/src/constants/index.ts`（RESERVATION_STATUS/TEXT/TYPE）、`frontend/src/components/StatusBadge.vue`、`frontend/src/pages/Reservations.vue`（筛选与操作按钮显隐） |
+| 后端 | `backend/internal/constants/enums.go`（定义）、`backend/internal/model/reservation.go`（含 `gorm:"-"` 的 waitlist_position 动态顺位）、`backend/internal/dto/reservation_dto.go`（oneof 校验）、`backend/internal/service/reservation_service.go`（Create 候补入队、Cancel 事务内 promoteWaitlistTx 兑现、状态机 Confirm/Cancel/CheckIn、顺位计算 waitlistPositionInQueue）、`backend/internal/util/formatters.go`（StatusText）、`backend/internal/constants/error_codes.go`（CodeReservation）、`backend/internal/constants/log_templates.go`（reservation_wait_ok / reservation_promote_ok 等模板）、`backend/internal/repository/reservation_repository.go`（候补队列 ListWaitlistedByStationTx、有效占用 CountActiveConflictTx、条件更新 UpdateStatusTx） |
+| 前端 | `frontend/src/constants/index.ts`（RESERVATION_STATUS/TEXT/TYPE）、`frontend/src/components/StatusBadge.vue`、`frontend/src/api/reservation.ts`（waitlist_position 字段）、`frontend/src/pages/Reservations.vue`（“候补中·第 N 位”展示、候补筛选与按钮显隐） |
 
 ### 赛事状态（draft / open / ready / finished）
 
@@ -308,6 +308,7 @@ npm run build
 
 - 分层依赖严格单向：handler → service → repository → model，构造器注入，无反向引用。
 - 多步写操作均放入 service 事务（`gorm.DB.Transaction`）；并发场景使用 `SELECT ... FOR UPDATE`（`repository/common.go` 的 `clauseLocking`），如余额扣减、机位状态流转、预约冲突校验。
+- 候补并发安全：取消在同一事务内按“机位行锁 → 预约行锁”顺序加锁，先以条件 `UPDATE ... WHERE status IN (...)` 幂等置 cancelled（重复/并发取消第二次影响行数为 0，直接失败），再从候补队列兑现至多一人；候补转 confirmed 同样使用条件更新（`waitlisted → confirmed`）兜底，保证同一人不会被确认两次；机位仅在仍无任何有效预约时才从 reserved 释放回 idle。候补顺位不落库，由 List 接口按同机位、时段重叠、提交顺序（created_at, id）动态计算，前面的人兑现或退出后顺位自然前移。
 - 横切关注点：JWT + RBAC（`middleware/auth.go`、`middleware/rbac.go`、`util/jwt.go`）、操作审计（`middleware/audit.go` + `audit_logs` 表 + 审计页面）、全局错误处理与请求追踪（`middleware/request_id.go`、`middleware/error_handler.go`、`util/app_error.go`、`constants/error_codes.go`）。
 - 共享组件：`StatusBadge`、`EmptyState`、`DataTable`、`ConfirmDialog`；共享 hooks/utils：`useAuth`、`usePagination`、`request.ts`、`format.ts`。
 - 严禁合并职责到单一文件：每个实体按 model / dto / repository / service / handler / router / constants 拆分，前端按 api / stores / pages / components 拆分。

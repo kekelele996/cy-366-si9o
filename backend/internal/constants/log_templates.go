@@ -16,6 +16,8 @@ var LogTemplates = map[string]string{
 	"package_order_ok":       "package order success, userID=%d, packageID=%d, amount=%f",
 	"user_package_credit":    "user package credit, userID=%d, packageID=%d, hours=%f",
 	"reservation_create_ok":  "reservation create success, userID=%d, stationID=%d, start=%s",
+	"reservation_wait_ok":    "reservation waitlisted, reservationID=%d, userID=%d, stationID=%d, position=%d",
+	"reservation_promote_ok": "reservation promoted from waitlist, reservationID=%d, userID=%d, stationID=%d, dueToCancelID=%d",
 	"reservation_confirm_ok": "reservation confirm success, reservationID=%d",
 	"reservation_cancel_ok":  "reservation cancel success, reservationID=%d",
 	"reservation_checkin_ok": "reservation checkin success, reservationID=%d",

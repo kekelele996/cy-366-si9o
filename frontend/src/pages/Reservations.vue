@@ -11,12 +11,20 @@
     <van-dropdown-menu>
       <van-dropdown-item v-model="status" :options="statusOptions" @change="load" />
     </van-dropdown-menu>
+    <van-notice-bar
+      v-if="waitlistCount > 0"
+      left-icon="clock-o"
+      :text="`当前有 ${waitlistCount} 条候补预约，热门机位取消后将按提交顺序自动兑现。`"
+    />
     <van-cell-group inset title="预约列表">
       <van-cell v-for="r in list" :key="r.id" :title="`预约 #${r.id} · 机位 ${r.station_id}`" :label="`${formatTime(r.start_time)} ~ ${formatTime(r.end_time)}`">
         <template #value>
           <StatusBadge kind="reservation" :status="r.status" />
+          <span v-if="r.status === 'waitlisted' && r.waitlist_position" class="wait-pos">
+            第 {{ r.waitlist_position }} 位
+          </span>
           <van-button v-if="isStaffOrAdmin && r.status === 'confirmed'" size="mini" type="primary" class="op-btn" @click="checkIn(r)">开机</van-button>
-          <van-button v-if="['pending','confirmed'].includes(r.status)" size="mini" type="danger" plain class="op-btn" @click="cancel(r)">取消</van-button>
+          <van-button v-if="['pending','waitlisted','confirmed'].includes(r.status)" size="mini" type="danger" plain class="op-btn" @click="cancel(r)">取消</van-button>
         </template>
       </van-cell>
     </van-cell-group>
@@ -32,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { showSuccessToast, showToast } from 'vant'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { listReservations, createReservation, cancelReservation, checkInReservation, type Reservation } from '@/api/reservation'
@@ -48,6 +56,7 @@ const status = ref('')
 const statusOptions = [
   { text: '全部状态', value: '' },
   { text: '待确认', value: 'pending' },
+  { text: '候补中', value: 'waitlisted' },
   { text: '已确认', value: 'confirmed' },
   { text: '已开机', value: 'checked_in' },
   { text: '已完成', value: 'completed' },
@@ -58,6 +67,8 @@ const showStart = ref(false)
 const showEnd = ref(false)
 const startDate = ref<Date[]>([])
 const endDate = ref<Date[]>([])
+
+const waitlistCount = computed(() => list.value.filter((r) => r.status === 'waitlisted').length)
 
 async function load() {
   const data = await listReservations({ page: page.value, page_size: pageSize, status: status.value || undefined })
@@ -81,15 +92,19 @@ async function create() {
     showToast('请填写机位ID与起止时间')
     return
   }
-  await createReservation({ station_id: stationId, start_time: form.value.start_time, end_time: form.value.end_time, remark: form.value.remark })
-  showSuccessToast('预约成功')
+  const res = await createReservation({ station_id: stationId, start_time: form.value.start_time, end_time: form.value.end_time, remark: form.value.remark })
+  if (res.status === 'waitlisted') {
+    showSuccessToast(`热门机位已满，已加入候补，当前第 ${res.waitlist_position ?? '-'} 位`)
+  } else {
+    showSuccessToast('预约成功')
+  }
   form.value = { station_id: '', start_time: '', end_time: '', remark: '' }
   load()
 }
 
 async function cancel(r: Reservation) {
   await cancelReservation(r.id)
-  showSuccessToast('已取消')
+  showSuccessToast(r.status === 'waitlisted' ? '已退出候补' : '已取消')
   load()
 }
 
@@ -105,4 +120,5 @@ onMounted(load)
 <style scoped>
 .submit-btn { margin: 12px 16px; }
 .op-btn { margin-left: 6px; }
+.wait-pos { margin-left: 6px; color: #ff976a; font-size: 12px; }
 </style>

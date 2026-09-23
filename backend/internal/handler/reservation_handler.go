@@ -39,7 +39,11 @@ func (h *ReservationHandler) Create(c *gin.Context) {
 		h.abort(c, err)
 		return
 	}
-	response.OKMessage(c, constants.MsgReserveOK, res)
+	msg := constants.MsgReserveOK
+	if res.Status == constants.ReservationWaitlisted {
+		msg = constants.MsgReserveWaitOK
+	}
+	response.OKMessage(c, msg, res)
 }
 
 // Confirm 确认预约。

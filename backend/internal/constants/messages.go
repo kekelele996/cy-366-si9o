@@ -10,13 +10,14 @@ const (
 	MsgLogoutSuccess = "退出登录成功"
 	MsgRegisterOK    = "注册成功"
 
-	MsgRechargeOK   = "充值成功"
-	MsgBuyPackageOK = "时长包购买成功"
-	MsgReserveOK    = "预约成功"
-	MsgCheckInOK    = "开机成功"
-	MsgRenewOK      = "续费成功"
-	MsgCheckoutOK   = "下机成功"
-	MsgDrawOK       = "抽签分组完成"
+	MsgRechargeOK    = "充值成功"
+	MsgBuyPackageOK  = "时长包购买成功"
+	MsgReserveOK     = "预约成功"
+	MsgReserveWaitOK = "已加入候补名单"
+	MsgCheckInOK     = "开机成功"
+	MsgRenewOK       = "续费成功"
+	MsgCheckoutOK    = "下机成功"
+	MsgDrawOK        = "抽签分组完成"
 )
 
 // 日志文案模板（非格式化部分）。

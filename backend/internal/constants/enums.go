@@ -22,20 +22,21 @@ func IsValidStationStatus(s string) bool {
 
 // ReservationStatus 预约状态枚举。
 const (
-	ReservationPending   = "pending"    // 待确认
-	ReservationConfirmed = "confirmed"  // 已确认
-	ReservationCheckedIn = "checked_in" // 已到店开机
-	ReservationCompleted = "completed"  // 已完成
-	ReservationCancelled = "cancelled"  // 已取消
+	ReservationPending    = "pending"    // 待确认
+	ReservationWaitlisted = "waitlisted" // 候补中
+	ReservationConfirmed  = "confirmed"  // 已确认
+	ReservationCheckedIn  = "checked_in" // 已到店开机
+	ReservationCompleted  = "completed"  // 已完成
+	ReservationCancelled  = "cancelled"  // 已取消
 )
 
 // AllReservationStatus 所有预约状态。
-var AllReservationStatus = []string{ReservationPending, ReservationConfirmed, ReservationCheckedIn, ReservationCompleted, ReservationCancelled}
+var AllReservationStatus = []string{ReservationPending, ReservationWaitlisted, ReservationConfirmed, ReservationCheckedIn, ReservationCompleted, ReservationCancelled}
 
 // IsValidReservationStatus 判断预约状态是否合法。
 func IsValidReservationStatus(s string) bool {
 	switch s {
-	case ReservationPending, ReservationConfirmed, ReservationCheckedIn, ReservationCompleted, ReservationCancelled:
+	case ReservationPending, ReservationWaitlisted, ReservationConfirmed, ReservationCheckedIn, ReservationCompleted, ReservationCancelled:
 		return true
 	}
 	return false

@@ -20,6 +20,8 @@ func StatusText(status string) string {
 		return "已预约"
 	case "pending":
 		return "待确认"
+	case "waitlisted":
+		return "候补中"
 	case "confirmed":
 		return "已确认"
 	case "checked_in":
