@@ -39,6 +39,10 @@ func (h *ReservationHandler) Create(c *gin.Context) {
 		h.abort(c, err)
 		return
 	}
+	if res.Status == constants.ReservationWaitlisted {
+		response.OKMessage(c, constants.MsgWaitlistOK, res)
+		return
+	}
 	response.OKMessage(c, constants.MsgReserveOK, res)
 }
 

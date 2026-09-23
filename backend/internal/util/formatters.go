@@ -22,6 +22,8 @@ func StatusText(status string) string {
 		return "待确认"
 	case "confirmed":
 		return "已确认"
+	case "waitlisted":
+		return "候补中"
 	case "checked_in":
 		return "已开机"
 	case "completed":

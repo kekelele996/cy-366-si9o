@@ -8,6 +8,8 @@ export interface Reservation {
   end_time: string
   status: string
   remark: string
+  /** 候补顺位（仅 status=waitlisted 时有值，1 表示队首） */
+  queue_position: number
 }
 
 export function listReservations(params: { page: number; page_size: number; status?: string; user_id?: number }) {

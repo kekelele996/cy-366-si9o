@@ -7,6 +7,7 @@
       <van-field v-model="form.remark" label="备注" placeholder="选填" />
     </van-cell-group>
     <div class="submit-btn"><van-button round block type="primary" @click="create">提交预约</van-button></div>
+    <p class="waitlist-tip">热门机位时段被占时提交将自动进入候补队列，取消会自动兑现最早一位。</p>
 
     <van-dropdown-menu>
       <van-dropdown-item v-model="status" :options="statusOptions" @change="load" />
@@ -15,8 +16,10 @@
       <van-cell v-for="r in list" :key="r.id" :title="`预约 #${r.id} · 机位 ${r.station_id}`" :label="`${formatTime(r.start_time)} ~ ${formatTime(r.end_time)}`">
         <template #value>
           <StatusBadge kind="reservation" :status="r.status" />
+          <van-tag v-if="r.status === 'waitlisted'" type="warning" plain class="pos-tag">候补第 {{ r.queue_position || '-' }} 位</van-tag>
+          <van-tag v-if="justPromotedIds.includes(r.id)" type="success" plain class="pos-tag">已轮到你</van-tag>
           <van-button v-if="isStaffOrAdmin && r.status === 'confirmed'" size="mini" type="primary" class="op-btn" @click="checkIn(r)">开机</van-button>
-          <van-button v-if="['pending','confirmed'].includes(r.status)" size="mini" type="danger" plain class="op-btn" @click="cancel(r)">取消</van-button>
+          <van-button v-if="['pending','confirmed','waitlisted'].includes(r.status)" size="mini" type="danger" plain class="op-btn" @click="cancel(r)">取消</van-button>
         </template>
       </van-cell>
     </van-cell-group>
@@ -39,7 +42,7 @@ import { listReservations, createReservation, cancelReservation, checkInReservat
 import { formatTime } from '@/utils/format'
 import { useAuth } from '@/hooks/useAuth'
 
-const { isStaffOrAdmin } = useAuth()
+const { isStaffOrAdmin, user } = useAuth()
 const list = ref<Reservation[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -49,6 +52,7 @@ const statusOptions = [
   { text: '全部状态', value: '' },
   { text: '待确认', value: 'pending' },
   { text: '已确认', value: 'confirmed' },
+  { text: '候补中', value: 'waitlisted' },
   { text: '已开机', value: 'checked_in' },
   { text: '已完成', value: 'completed' },
   { text: '已取消', value: 'cancelled' },
@@ -58,9 +62,24 @@ const showStart = ref(false)
 const showEnd = ref(false)
 const startDate = ref<Date[]>([])
 const endDate = ref<Date[]>([])
+// 本次会话中见过的候补记录，刷新后若变为已确认则提示“已轮到你”。
+const waitlistedIds = ref<Set<number>>(new Set())
+const justPromotedIds = ref<number[]>([])
 
 async function load() {
-  const data = await listReservations({ page: page.value, page_size: pageSize, status: status.value || undefined })
+  // 会员只看自己的预约与候补顺位；店员/管理员可查看全部。
+  const userId = isStaffOrAdmin.value ? undefined : user.value?.id
+  const data = await listReservations({ page: page.value, page_size: pageSize, status: status.value || undefined, user_id: userId })
+  const promoted: number[] = []
+  for (const r of data.list) {
+    if (r.status === 'waitlisted') {
+      waitlistedIds.value.add(r.id)
+    } else if (waitlistedIds.value.has(r.id) && r.status === 'confirmed') {
+      promoted.push(r.id)
+      waitlistedIds.value.delete(r.id)
+    }
+  }
+  justPromotedIds.value = promoted
   list.value = data.list
   total.value = data.total
 }
@@ -81,15 +100,16 @@ async function create() {
     showToast('请填写机位ID与起止时间')
     return
   }
-  await createReservation({ station_id: stationId, start_time: form.value.start_time, end_time: form.value.end_time, remark: form.value.remark })
-  showSuccessToast('预约成功')
+  const res = await createReservation({ station_id: stationId, start_time: form.value.start_time, end_time: form.value.end_time, remark: form.value.remark })
+  showSuccessToast(res.status === 'waitlisted' ? '该时段已约满，已加入候补' : '预约成功')
+  if (res.status === 'waitlisted') status.value = ''
   form.value = { station_id: '', start_time: '', end_time: '', remark: '' }
   load()
 }
 
 async function cancel(r: Reservation) {
   await cancelReservation(r.id)
-  showSuccessToast('已取消')
+  showSuccessToast(r.status === 'waitlisted' ? '已退出候补' : '已取消')
   load()
 }
 
@@ -104,5 +124,7 @@ onMounted(load)
 
 <style scoped>
 .submit-btn { margin: 12px 16px; }
+.waitlist-tip { margin: 0 20px 8px; font-size: 12px; color: var(--van-text-color-2, #969799); }
 .op-btn { margin-left: 6px; }
+.pos-tag { margin-left: 6px; }
 </style>

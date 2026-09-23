@@ -82,12 +82,15 @@ CREATE TABLE IF NOT EXISTS reservations (
     station_id BIGINT UNSIGNED NOT NULL,
     start_time DATETIME(3) NOT NULL,
     end_time DATETIME(3) NOT NULL,
+    -- pending/confirmed/waitlisted/checked_in/completed/cancelled；waitlisted=候补中，不占用机位
     status VARCHAR(16) DEFAULT 'pending',
     remark VARCHAR(255) DEFAULT '',
     created_at DATETIME(3),
     updated_at DATETIME(3),
     KEY idx_reservations_user (user_id),
-    KEY idx_reservations_station (station_id)
+    KEY idx_reservations_station (station_id),
+    -- 候补顺位查询：同机位+状态+时段重叠后按提交时间排序
+    KEY idx_reservations_waitlist (station_id, status, start_time, end_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS sessions (

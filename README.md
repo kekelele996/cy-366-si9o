@@ -28,7 +28,7 @@ docker compose up -d --build
 
 1. **机位/包厢实时状态看板**：网格/列表展示机位实时状态（空闲/使用中/故障/预约），按区域筛选，支持 WebSocket 实时推送（`/api/v1/ws/stations`）。
 2. **会员充值与时长包**：会员充值余额、购买 10 小时/30 小时/月卡，消费时优先扣除时长包余额，不足时扣余额。
-3. **机位预约与续费**：会员预约指定机位与时段，到店扫码开机，上机过程可续费延长时长。
+3. **机位预约与续费**：会员预约指定机位与时段，热门机位时段冲突时可排队候补（页面展示“候补中”与当前顺位），已确认预约取消后自动兑现最早一位候补；到店扫码开机，上机过程可续费延长时长。
 4. **上机时长排行榜**：按日/周/月统计会员累计上机时长，支持按游戏类型（LOL/CSGO/王者荣耀）筛选。
 5. **赛事报名与战队管理**：门店发布电竞赛事，玩家个人/战队报名，系统自动抽签分组，记录比赛结果与战绩。
 
@@ -152,8 +152,8 @@ docker compose up -d --build
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | /reservations | 预约分页列表 | 登录 |
-| POST | /reservations | 创建预约 | 登录 |
+| GET | /reservations | 预约分页列表（候补中记录返回 queue_position 当前顺位） | 登录 |
+| POST | /reservations | 创建预约；时段冲突时自动转为候补（status=waitlisted） | 登录 |
 | POST | /reservations/:id/confirm | 确认预约 | admin/staff |
 | POST | /reservations/:id/cancel | 取消预约 | 登录 |
 | POST | /reservations/:id/checkin | 到店开机 | admin/staff |
@@ -276,7 +276,9 @@ npm run build
 | 后端 | `backend/internal/constants/enums.go`（定义）、`backend/internal/model/station.go`（模型默认值）、`backend/internal/dto/station_dto.go`（handler 校验 oneof）、`backend/internal/service/station_service.go`（状态机 allowedStationTransition）、`backend/internal/util/formatters.go`（StatusText）、`backend/internal/constants/error_codes.go`（CodeStationBusy/Fault）、`backend/internal/constants/log_templates.go`（station_status_change 模板）、`backend/internal/repository/station_repository.go`（筛选） |
 | 前端 | `frontend/src/constants/index.ts`（STATION_STATUS/TEXT/TYPE）、`frontend/src/components/StatusBadge.vue`、`frontend/src/pages/Stations.vue`（筛选与徽标）、`frontend/src/pages/Dashboard.vue`（看板状态展示） |
 
-### 预约状态（pending / confirmed / checked_in / completed / cancelled）
+### 预约状态（pending / confirmed / waitlisted / checked_in / completed / cancelled）
+
+`waitlisted` 为候补状态：热门机位时段与已确认预约冲突时提交自动进入候补（不占机位），预约页显示“候补中”与当前顺位（同机位、时段重叠、更早提交的候补数 + 1）。已确认预约取消时，在同机位、与该时段重叠的候补里，取最早提交且不再冲突的一位自动转为 `confirmed`，其余候补顺位前移；一次取消至多兑现一人，重复/并发取消不会重复确认（行锁 + 状态复查）。
 
 | 端 | 文件 |
 | --- | --- |

@@ -23,6 +23,7 @@ export const STATION_STATUS_TYPE: Record<string, string> = {
 export const RESERVATION_STATUS = {
   PENDING: 'pending',
   CONFIRMED: 'confirmed',
+  WAITLISTED: 'waitlisted',
   CHECKED_IN: 'checked_in',
   COMPLETED: 'completed',
   CANCELLED: 'cancelled',
@@ -31,6 +32,7 @@ export const RESERVATION_STATUS = {
 export const RESERVATION_STATUS_TEXT: Record<string, string> = {
   pending: '待确认',
   confirmed: '已确认',
+  waitlisted: '候补中',
   checked_in: '已开机',
   completed: '已完成',
   cancelled: '已取消',
@@ -39,6 +41,7 @@ export const RESERVATION_STATUS_TEXT: Record<string, string> = {
 export const RESERVATION_STATUS_TYPE: Record<string, string> = {
   pending: 'warning',
   confirmed: 'primary',
+  waitlisted: 'warning',
   checked_in: 'primary',
   completed: 'success',
   cancelled: 'default',
