@@ -1,0 +1,17 @@
+# frontend
+frontend/node_modules/
+frontend/dist/
+*.local
+
+# go
+backend/server
+backend/coverage.out
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# playwright
+.playwright-cli/
